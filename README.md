@@ -39,7 +39,7 @@ Abre `index.html` directamente en el navegador (doble clic, o sírvelo con cualq
 
 ### Publicarlo online con GitHub Pages
 
-Al ser un único `index.html` estático, puede servirse gratis con GitHub Pages: en el repositorio, **Settings → Pages → Deploy from a branch**, rama `main` y carpeta `/ (root)`. Quedará accesible en `https://<tu-usuario>.github.io/<nombre-del-repo>/` para usarlo en clase sin descargar nada.
+Al ser un único `index.html` estático, puede servirse gratis con GitHub Pages: en el repositorio, **Settings → Pages → Deploy from a branch**, rama `main` y carpeta `/ (root)`. Quedará accesible en `https://yfenchehr.github.io/pseudocodigo_ide/` para usarlo en clase sin descargar nada.
 
 ## Referencia del lenguaje
 
@@ -79,7 +79,7 @@ Distribuido bajo licencia [MIT](LICENSE). Puedes usarlo, copiarlo, modificarlo y
 
 Al ser un proyecto público y sin ánimo de lucro, las contribuciones de la comunidad docente y de desarrolladores son bienvenidas.
 
-Si encuentras un error, tienes una sugerencia o quieres proponer una mejora (por ejemplo, una nueva misión), abre un [Issue](../../issues) en este repositorio. Si quieres aportar código directamente, puedes abrir un Pull Request.
+Si encuentras un error, tienes una sugerencia o quieres proponer una mejora (por ejemplo, una nueva misión), abre un [Issue](https://github.com/YfencheHR/pseudocodigo_ide/issues) en este repositorio. Si quieres aportar código directamente, puedes abrir un Pull Request.
 
 ## Autor y contacto
 
