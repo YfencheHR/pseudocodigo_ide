@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="PseudoIDE — editor e intérprete de pseudocódigo en español, 100% en el navegador. Herramienta docente para aprender lógica de programación sin instalar nada.">
 <title>PseudoIDE — Editor de Pseudocódigo</title>
 <style>
   /* ── RESET & BASE ────────────────────────────────────── */
@@ -38,6 +39,7 @@
     font-family: var(--sans);
     font-size: 14px;
     height: 100vh;
+    height: 100dvh; /* móviles: descuenta la barra del navegador */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -352,6 +354,14 @@
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* pantallas estrechas: editor y consola apilados */
+  @media (max-width: 720px) {
+    .workspace { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    .panel { border-right: none; border-bottom: 1px solid var(--border); }
+    .topbar { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
+    .mission-select { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
@@ -387,8 +397,6 @@
   <span class="snip kw-loop" onclick="insertSnip('PARA  = 1 HASTA  HACER\n  \nFIN_PARA')">PARA…HASTA</span>
   <span class="snip kw-io" onclick="insertSnip('LEER ')">LEER</span>
   <span class="snip kw-io" onclick="insertSnip('MOSTRAR \'\'')">MOSTRAR</span>
-  <span class="snip kw-io" onclick="insertSnip('CALCULAR ')">CALCULAR</span>
-  <span class="snip kw-io" onclick="insertSnip('GUARDAR ')">GUARDAR</span>
 </div>
 
 <!-- WORKSPACE -->
@@ -409,6 +417,7 @@ Pulsa ▶ Ejecutar para ver el resultado."></textarea>
     </div>
     <div class="statusbar">
       <span id="line-count">0 líneas</span>
+      <span>Ctrl+Enter = ejecutar</span>
       <span id="status-msg"></span>
     </div>
   </div>
@@ -653,7 +662,7 @@ editor.addEventListener('keydown', e => {
     editor.selectionStart = editor.selectionEnd = s + 2;
     updateLineNumbers();
   }
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
     // autoindent
     const s = editor.selectionStart;
     const txt = editor.value.substring(0, s);
@@ -681,6 +690,17 @@ function insertSnip(text) {
   updateLineNumbers();
 }
 
+// ── BORRADOR PERSISTENTE ─────────────────────────────
+// El contenido del editor se guarda en localStorage para que recargar
+// la página (o cerrarla sin querer) no pierda el trabajo del alumno.
+const STORAGE_KEY = 'pseudoide_borrador';
+
+function saveDraft() {
+  try { localStorage.setItem(STORAGE_KEY, editor.value); } catch (e) { /* modo privado, sin storage */ }
+}
+
+editor.addEventListener('input', saveDraft);
+
 function resetEditor() {
   editor.value = '';
   document.getElementById('mission-picker').value = '';
@@ -688,6 +708,7 @@ function resetEditor() {
   clearConsole();
   document.getElementById('vars-panel').style.display = 'none';
   setStatus('', '');
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* sin storage */ }
 }
 
 document.getElementById('mission-picker').addEventListener('change', function() {
@@ -697,10 +718,29 @@ document.getElementById('mission-picker').addEventListener('change', function() 
     clearConsole();
     document.getElementById('vars-panel').style.display = 'none';
     setStatus('Misión cargada', 'ok');
+    saveDraft();
+  }
+});
+
+// Ctrl+Enter (o Cmd+Enter) ejecuta desde cualquier parte de la página
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runCode();
   }
 });
 
 updateLineNumbers();
+
+// restaurar borrador guardado (si lo hay)
+try {
+  const draft = localStorage.getItem(STORAGE_KEY);
+  if (draft) {
+    editor.value = draft;
+    updateLineNumbers();
+    setStatus('Borrador restaurado', 'ok');
+  }
+} catch (e) { /* sin storage */ }
 
 // ═══════════════════════════════════════════════════════
 //  CONSOLA
@@ -731,7 +771,6 @@ function setStatus(msg, cls) {
 
 // Estado global de ejecución
 let env = {};           // variables
-let inputQueue = [];    // valores pendientes de LEER
 let resolveInput = null;// promesa para input interactivo
 let isRunning = false;
 let totalSteps = 0;         // pasos ejecutados en esta corrida (todas las llamadas anidadas)
@@ -762,9 +801,24 @@ function renderVars() {
   const keys  = Object.keys(env);
   if (keys.length === 0) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  grid.innerHTML = keys.map(k =>
-    `<div class="var-chip"><span class="var-name">${k}</span><span class="var-eq"> = </span><span class="var-val">${JSON.stringify(env[k])}</span></div>`
-  ).join('');
+  // construcción vía DOM (no innerHTML): los nombres de variable vienen del
+  // código del usuario y podrían contener HTML
+  grid.textContent = '';
+  for (const k of keys) {
+    const chip = document.createElement('div');
+    chip.className = 'var-chip';
+    const name = document.createElement('span');
+    name.className = 'var-name';
+    name.textContent = k;
+    const eq = document.createElement('span');
+    eq.className = 'var-eq';
+    eq.textContent = ' = ';
+    const val = document.createElement('span');
+    val.className = 'var-val';
+    val.textContent = JSON.stringify(env[k]);
+    chip.append(name, eq, val);
+    grid.appendChild(chip);
+  }
 }
 
 // ── TOKENIZER ────────────────────────────────────────
@@ -828,7 +882,10 @@ function evalExpr(expr) {
       const ln = parseFloat(lv), rn = parseFloat(rv);
       if (op === '-') return ln - rn;
       if (op === '*') return ln * rn;
-      if (op === '/') return rn !== 0 ? ln / rn : 'ERROR_DIV0';
+      if (op === '/') {
+        if (rn === 0) throw new Error('División por cero en: ' + expr);
+        return ln / rn;
+      }
     }
   }
 
@@ -885,29 +942,36 @@ function findOpIdx(expr, op) {
 function evalCond(cond) {
   cond = cond.trim();
 
-  // Y / O lógicos
-  const andIdx = indexOfWord(cond, 'Y');
-  if (andIdx >= 0) {
-    return evalCond(cond.substring(0, andIdx)) && evalCond(cond.substring(andIdx + 2));
-  }
-  const orIdx = indexOfWord(cond, 'O');
+  // Y / O lógicos. Se parte primero por O (menor precedencia) para que
+  // "a O b Y c" se agrupe como "a O (b Y c)", igual que en los lenguajes reales.
+  const orIdx = findWordIdx(cond, 'O');
   if (orIdx >= 0) {
-    return evalCond(cond.substring(0, orIdx)) || evalCond(cond.substring(orIdx + 2));
+    return evalCond(cond.substring(0, orIdx)) || evalCond(cond.substring(orIdx + 1));
+  }
+  const andIdx = findWordIdx(cond, 'Y');
+  if (andIdx >= 0) {
+    return evalCond(cond.substring(0, andIdx)) && evalCond(cond.substring(andIdx + 1));
   }
 
-  // comparadores
+  // comparadores (buscados fuera de literales de cadena)
   for (const op of ['>=', '<=', '<>', '!=', '=', '>', '<']) {
-    const idx = cond.indexOf(op);
+    const idx = findCompIdx(cond, op);
     if (idx > 0) {
       const lv = evalExpr(cond.substring(0, idx).trim());
       const rv = evalExpr(cond.substring(idx + op.length).trim());
       const ln = parseFloat(lv), rn = parseFloat(rv);
-      if (op === '=')  return String(lv).toUpperCase() === String(rv).toUpperCase();
+      if (op === '=') {
+        if (isNumVal(lv) && isNumVal(rv)) return lv === rv;
+        return String(lv).toUpperCase() === String(rv).toUpperCase();
+      }
+      if (op === '<>' || op === '!=') {
+        if (isNumVal(lv) && isNumVal(rv)) return lv !== rv;
+        return String(lv).toUpperCase() !== String(rv).toUpperCase();
+      }
       if (op === '>=') return ln >= rn;
       if (op === '<=') return ln <= rn;
       if (op === '>')  return ln > rn;
       if (op === '<')  return ln < rn;
-      if (op === '<>' || op === '!=') return String(lv) !== String(rv);
     }
   }
 
@@ -918,10 +982,37 @@ function evalCond(cond) {
   return vs === 'VERDADERO' || vs === 'TRUE' || vs === '1';
 }
 
-function indexOfWord(str, word) {
-  const re = new RegExp('\\b' + word + '\\b', 'i');
-  const m = re.exec(str);
-  return m ? m.index : -1;
+// Busca una palabra suelta (Y/O) fuera de literales de cadena.
+// No basta \\b de regex: "PREMIO Y TRAMPA" dentro de comillas partiría la condición.
+const WORD_CHAR = /[\wÁÉÍÓÚÜÑáéíóúüñ]/;
+function findWordIdx(str, word) {
+  const W = word.toUpperCase();
+  let inStr = false, strChar = '';
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (!inStr && (c === "'" || c === '"')) { inStr = true; strChar = c; continue; }
+    if (inStr && c === strChar) { inStr = false; continue; }
+    if (inStr) continue;
+    if (str.substring(i, i + W.length).toUpperCase() === W) {
+      const before = i === 0 ? '' : str[i - 1];
+      const after  = str[i + W.length] || '';
+      if (!WORD_CHAR.test(before) && !WORD_CHAR.test(after)) return i;
+    }
+  }
+  return -1;
+}
+
+// Busca un operador de comparación fuera de literales de cadena.
+function findCompIdx(cond, op) {
+  let inStr = false, strChar = '';
+  for (let i = 1; i < cond.length; i++) {
+    const c = cond[i];
+    if (!inStr && (c === "'" || c === '"')) { inStr = true; strChar = c; continue; }
+    if (inStr && c === strChar) { inStr = false; continue; }
+    if (inStr) continue;
+    if (cond.substring(i, i + op.length) === op) return i;
+  }
+  return -1;
 }
 
 // ── EJECUTOR ─────────────────────────────────────────
@@ -929,7 +1020,6 @@ async function runCode() {
   if (isRunning) return;
   isRunning = true;
   env = {};
-  inputQueue = [];
   totalSteps = 0;
   stopRequested = false;
   clearConsole();
@@ -947,6 +1037,10 @@ async function runCode() {
   } catch(e) {
     if (e.message === 'INPUT_NEEDED') {
       // ya está esperando, no hacer nada
+    } else if (e.message === 'TERMINADO') {
+      consoleLine('', 'info');
+      consoleLine('─── Programa terminado (instrucción TERMINAR) ───', 'ok');
+      setStatus('Completado', 'ok');
     } else if (e.message === 'STOPPED') {
       consoleLine('⏹ Ejecución detenida por el usuario.', 'warn');
       setStatus('Detenido', 'err');
@@ -986,8 +1080,8 @@ async function execute(lines, from, to) {
     if (UP === 'INICIO') { i++; continue; }
     if (UP === 'FIN')    { break; }
 
-    // TERMINAR programa
-    if (UP.startsWith('TERMINAR')) { throw new Error('TERMINAR'); }
+    // TERMINAR programa (fin limpio, no error)
+    if (UP === 'TERMINAR' || UP.startsWith('TERMINAR ')) { throw new Error('TERMINADO'); }
 
     // MOSTRAR
     if (UP.startsWith('MOSTRAR ')) {
@@ -1101,15 +1195,9 @@ async function execute(lines, from, to) {
       i++; continue;
     }
 
-    // CALCULAR x = expr (alias de asignación)
-    const calcM = line.match(/^CALCULAR\s+(\S+)\s*=\s*(.+)$/i);
-    if (calcM) {
-      env[calcM[1].toUpperCase()] = evalExpr(calcM[2].trim());
-      renderVars();
-      i++; continue;
-    }
-
-    // línea no reconocida — ignorar silenciosamente
+    // línea no reconocida — avisar sin detener la ejecución, para que el
+    // alumno vea la errata en vez de preguntarse por qué "no hace nada"
+    consoleLine('⚠ Línea ' + (i + 1) + ' no reconocida (se ignora): ' + line, 'warn');
     i++;
   }
 }
