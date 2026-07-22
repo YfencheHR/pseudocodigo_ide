@@ -373,7 +373,7 @@
     PseudoIDE
   </div>
   <div class="mission-select">
-    <label>Cargar misión:</label>
+    <label for="mission-picker">Cargar misión:</label>
     <select id="mission-picker">
       <option value="">— Ejemplo en blanco —</option>
       <option value="escape">🔐 Misión #1: Escape Room</option>
@@ -389,14 +389,14 @@
 <!-- SNIPPET BAR -->
 <div class="snippetbar">
   <span class="snippetbar-label">Insertar:</span>
-  <span class="snip" onclick="insertSnip('INICIO\n  \nFIN')">INICIO…FIN</span>
-  <span class="snip kw-cond" onclick="insertSnip('SI  ENTONCES\n  \nFIN_SI')">SI…ENTONCES</span>
-  <span class="snip kw-cond" onclick="insertSnip('SI  ENTONCES\n  \nSI NO\n  \nFIN_SI')">SI…SI NO</span>
-  <span class="snip kw-loop" onclick="insertSnip('MIENTRAS  HACER\n  \nFIN_MIENTRAS')">MIENTRAS…HACER</span>
-  <span class="snip kw-loop" onclick="insertSnip('PARA  EN [] HACER\n  \nFIN_PARA')">PARA…EN</span>
-  <span class="snip kw-loop" onclick="insertSnip('PARA  = 1 HASTA  HACER\n  \nFIN_PARA')">PARA…HASTA</span>
-  <span class="snip kw-io" onclick="insertSnip('LEER ')">LEER</span>
-  <span class="snip kw-io" onclick="insertSnip('MOSTRAR \'\'')">MOSTRAR</span>
+  <button type="button" class="snip" onclick="insertSnip('INICIO\n  \nFIN')">INICIO…FIN</button>
+  <button type="button" class="snip kw-cond" onclick="insertSnip('SI  ENTONCES\n  \nFIN_SI')">SI…ENTONCES</button>
+  <button type="button" class="snip kw-cond" onclick="insertSnip('SI  ENTONCES\n  \nSI NO\n  \nFIN_SI')">SI…SI NO</button>
+  <button type="button" class="snip kw-loop" onclick="insertSnip('MIENTRAS  HACER\n  \nFIN_MIENTRAS')">MIENTRAS…HACER</button>
+  <button type="button" class="snip kw-loop" onclick="insertSnip('PARA  EN [] HACER\n  \nFIN_PARA')">PARA…EN</button>
+  <button type="button" class="snip kw-loop" onclick="insertSnip('PARA  = 1 HASTA  HACER\n  \nFIN_PARA')">PARA…HASTA</button>
+  <button type="button" class="snip kw-io" onclick="insertSnip('LEER ')">LEER</button>
+  <button type="button" class="snip kw-io" onclick="insertSnip('MOSTRAR \'\'')">MOSTRAR</button>
 </div>
 
 <!-- WORKSPACE -->
@@ -434,7 +434,7 @@ Pulsa ▶ Ejecutar para ver el resultado."></textarea>
       <div class="console-line info">// Usa los botones de la barra superior para cargar una misión de ejemplo.</div>
     </div>
     <div class="input-row hidden" id="input-row">
-      <label>→ Introduce valor:</label>
+      <label for="runtime-input">→ Introduce valor:</label>
       <input type="text" id="runtime-input" placeholder="escribe aquí y pulsa Enter…" />
       <button id="send-input" onclick="sendInput()">OK</button>
     </div>
@@ -696,7 +696,11 @@ function insertSnip(text) {
 const STORAGE_KEY = 'pseudoide_borrador';
 
 function saveDraft() {
-  try { localStorage.setItem(STORAGE_KEY, editor.value); } catch (e) { /* modo privado, sin storage */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, editor.value);
+  } catch (e) {
+    console.warn('PseudoIDE: no se pudo guardar el borrador (almacenamiento no disponible)', e);
+  }
 }
 
 editor.addEventListener('input', saveDraft);
@@ -708,7 +712,11 @@ function resetEditor() {
   clearConsole();
   document.getElementById('vars-panel').style.display = 'none';
   setStatus('', '');
-  try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* sin storage */ }
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    console.warn('PseudoIDE: no se pudo borrar el borrador (almacenamiento no disponible)', e);
+  }
 }
 
 document.getElementById('mission-picker').addEventListener('change', function() {
@@ -740,7 +748,9 @@ try {
     updateLineNumbers();
     setStatus('Borrador restaurado', 'ok');
   }
-} catch (e) { /* sin storage */ }
+} catch (e) {
+  console.warn('PseudoIDE: no se pudo restaurar el borrador (almacenamiento no disponible)', e);
+}
 
 // ═══════════════════════════════════════════════════════
 //  CONSOLA
@@ -842,59 +852,67 @@ function evalExpr(expr) {
   if (/^VERDADERO$/i.test(expr)) return true;
   if (/^FALSO$/i.test(expr)) return false;
 
-  // separar por + respetando strings, paréntesis y corchetes.
-  // Esto va ANTES del chequeo de "string literal" de abajo: la regex
-  // ^'(.*)'$ es ávida y, en algo como 'texto ' + var + ' más', capturaría
-  // desde la primera comilla hasta la última como si todo fuera un único
-  // literal, tragándose la concatenación entera.
-  const plusParts = splitByOp(expr, '+');
-  if (plusParts.length > 1) {
-    const vals = plusParts.map(p => evalExpr(p.trim()));
-    // si todos son numéricos → suma
-    if (vals.every(v => isNumVal(v))) {
-      return vals.reduce((a, b) => a + b, 0);
-    }
-    // si alguno es string → concatenación
-    return vals.map(v => {
-      if (typeof v === 'boolean') return v ? 'VERDADERO' : 'FALSO';
-      return String(v);
-    }).join('');
-  }
+  // el + va ANTES del chequeo de "string literal": la regex ^'(.*)'$ es ávida
+  // y en 'texto ' + var + ' más' capturaría toda la concatenación como un literal
+  const suma = evalSuma(expr);
+  if (suma !== undefined) return suma;
 
   // string literal 'texto' o "texto"
   const strM = expr.match(/^'(.*)'$/s) || expr.match(/^"(.*)"$/s);
   if (strM) return strM[1];
 
   // número literal
-  if (/^-?\d+(\.\d+)?$/.test(expr)) return parseFloat(expr);
+  if (/^-?\d+(\.\d+)?$/.test(expr)) return Number.parseFloat(expr);
 
   // paréntesis envolventes
   if (expr.startsWith('(') && expr.endsWith(')') && matchingClose(expr, 0) === expr.length - 1) {
     return evalExpr(expr.slice(1, -1).trim());
   }
 
-  // operadores - * / (derecha a izquierda para precedencia)
+  const arit = evalAritmetica(expr);
+  if (arit !== undefined) return arit;
+
+  return lookupVar(expr);
+}
+
+// Suma numérica o concatenación de textos; undefined si no hay + de nivel superior.
+function evalSuma(expr) {
+  const parts = splitByOp(expr, '+');
+  if (parts.length <= 1) return undefined;
+  const vals = parts.map(p => evalExpr(p.trim()));
+  if (vals.every(isNumVal)) return vals.reduce((a, b) => a + b, 0);
+  return vals.map(valToText).join('');
+}
+
+function valToText(v) {
+  if (typeof v === 'boolean') return v ? 'VERDADERO' : 'FALSO';
+  return String(v);
+}
+
+// Operadores - * / (de derecha a izquierda); undefined si no hay ninguno.
+function evalAritmetica(expr) {
   for (const op of ['-', '*', '/']) {
     const idx = findOpIdx(expr, op);
-    if (idx > 0) {
-      const lv = evalExpr(expr.substring(0, idx).trim());
-      const rv = evalExpr(expr.substring(idx + 1).trim());
-      const ln = parseFloat(lv), rn = parseFloat(rv);
-      if (op === '-') return ln - rn;
-      if (op === '*') return ln * rn;
-      if (op === '/') {
-        if (rn === 0) throw new Error('División por cero en: ' + expr);
-        return ln / rn;
-      }
-    }
+    if (idx > 0) return aplicarOperador(op, expr, idx);
   }
+  return undefined;
+}
 
-  // variable (buscar en env con nombre en mayúsculas)
+function aplicarOperador(op, expr, idx) {
+  const ln = Number.parseFloat(evalExpr(expr.substring(0, idx).trim()));
+  const rn = Number.parseFloat(evalExpr(expr.substring(idx + 1).trim()));
+  if (op === '-') return ln - rn;
+  if (op === '*') return ln * rn;
+  if (rn === 0) throw new Error('División por cero en: ' + expr);
+  return ln / rn;
+}
+
+// Variable del entorno (insensible a mayúsculas); si no existe, el texto tal cual.
+function lookupVar(expr) {
   const k = expr.toUpperCase();
   if (k in env) return env[k];
   if (expr in env) return env[expr];
-
-  return expr; // literal no reconocido, devolver tal cual
+  return expr;
 }
 
 function matchingClose(str, open) {
@@ -907,29 +925,37 @@ function matchingClose(str, open) {
   return -1;
 }
 
+// Parte expr por op (nivel superior: fuera de cadenas, paréntesis y corchetes).
 function splitByOp(expr, op) {
-  const parts = [];
-  let depth = 0, inStr = false, strChar = '', cur = '';
-  for (let i = 0; i < expr.length; i++) {
+  const cuts = [];
+  let depth = 0;
+  scanOutsideStrings(expr, 0, i => {
     const c = expr[i];
-    if (!inStr && (c === "'" || c === '"')) { inStr = true; strChar = c; cur += c; continue; }
-    if (inStr && c === strChar) { inStr = false; cur += c; continue; }
-    if (inStr) { cur += c; continue; }
-    if (c === '(' || c === '[') { depth++; cur += c; continue; }
-    if (c === ')' || c === ']') { depth--; cur += c; continue; }
-    if (depth === 0 && c === op) { parts.push(cur); cur = ''; continue; }
-    cur += c;
+    if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    else if (depth === 0 && c === op) cuts.push(i);
+    return undefined;
+  });
+  if (cuts.length === 0) return [expr];
+  const parts = [];
+  let prev = 0;
+  for (const cut of cuts) {
+    parts.push(expr.slice(prev, cut));
+    prev = cut + 1;
   }
-  parts.push(cur);
-  return parts.length > 1 ? parts : [expr];
+  parts.push(expr.slice(prev));
+  return parts;
 }
 
 function findOpIdx(expr, op) {
-  let depth = 0, inStr = false, strChar = '';
+  let depth = 0, strChar = null;
   for (let i = expr.length - 1; i >= 1; i--) {
     const c = expr[i];
-    if (!inStr && (c === "'" || c === '"')) { inStr = !inStr; strChar = c; continue; }
-    if (inStr) continue;
+    if (strChar) {
+      if (c === strChar) strChar = null;
+      continue;
+    }
+    if (c === "'" || c === '"') { strChar = c; continue; }
     if (c === ')' || c === ']') depth++;
     if (c === '(' || c === '[') depth--;
     if (!depth && c === op) return i;
@@ -953,66 +979,80 @@ function evalCond(cond) {
     return evalCond(cond.substring(0, andIdx)) && evalCond(cond.substring(andIdx + 1));
   }
 
-  // comparadores (buscados fuera de literales de cadena)
+  const comp = evalComparacion(cond);
+  if (comp !== undefined) return comp;
+
+  return esVerdadero(evalExpr(cond));
+}
+
+// Aplica el primer comparador encontrado fuera de cadenas; undefined si no hay.
+function evalComparacion(cond) {
   for (const op of ['>=', '<=', '<>', '!=', '=', '>', '<']) {
     const idx = findCompIdx(cond, op);
     if (idx > 0) {
       const lv = evalExpr(cond.substring(0, idx).trim());
       const rv = evalExpr(cond.substring(idx + op.length).trim());
-      const ln = parseFloat(lv), rn = parseFloat(rv);
-      if (op === '=') {
-        if (isNumVal(lv) && isNumVal(rv)) return lv === rv;
-        return String(lv).toUpperCase() === String(rv).toUpperCase();
-      }
-      if (op === '<>' || op === '!=') {
-        if (isNumVal(lv) && isNumVal(rv)) return lv !== rv;
-        return String(lv).toUpperCase() !== String(rv).toUpperCase();
-      }
-      if (op === '>=') return ln >= rn;
-      if (op === '<=') return ln <= rn;
-      if (op === '>')  return ln > rn;
-      if (op === '<')  return ln < rn;
+      return aplicarComparador(op, lv, rv);
     }
   }
+  return undefined;
+}
 
-  // booleano directo
-  const v = evalExpr(cond);
+function aplicarComparador(op, lv, rv) {
+  if (op === '=') return esIgual(lv, rv);
+  if (op === '<>' || op === '!=') return !esIgual(lv, rv);
+  const ln = Number.parseFloat(lv), rn = Number.parseFloat(rv);
+  if (op === '>=') return ln >= rn;
+  if (op === '<=') return ln <= rn;
+  if (op === '>')  return ln > rn;
+  return ln < rn;
+}
+
+// Igualdad: numérica si ambos son números; textual sin distinguir mayúsculas si no.
+function esIgual(lv, rv) {
+  if (isNumVal(lv) && isNumVal(rv)) return lv === rv;
+  return String(lv).toUpperCase() === String(rv).toUpperCase();
+}
+
+function esVerdadero(v) {
   if (typeof v === 'boolean') return v;
   const vs = String(v).toUpperCase();
   return vs === 'VERDADERO' || vs === 'TRUE' || vs === '1';
 }
 
-// Busca una palabra suelta (Y/O) fuera de literales de cadena.
-// No basta \\b de regex: "PREMIO Y TRAMPA" dentro de comillas partiría la condición.
-const WORD_CHAR = /[\wÁÉÍÓÚÜÑáéíóúüñ]/;
-function findWordIdx(str, word) {
-  const W = word.toUpperCase();
+// Recorre str desde start visitando solo posiciones fuera de literales de
+// cadena; visit(i) devuelve un índice para terminar o undefined para seguir.
+function scanOutsideStrings(str, start, visit) {
   let inStr = false, strChar = '';
-  for (let i = 0; i < str.length; i++) {
+  for (let i = start; i < str.length; i++) {
     const c = str[i];
     if (!inStr && (c === "'" || c === '"')) { inStr = true; strChar = c; continue; }
     if (inStr && c === strChar) { inStr = false; continue; }
     if (inStr) continue;
-    if (str.substring(i, i + W.length).toUpperCase() === W) {
-      const before = i === 0 ? '' : str[i - 1];
-      const after  = str[i + W.length] || '';
-      if (!WORD_CHAR.test(before) && !WORD_CHAR.test(after)) return i;
-    }
+    const r = visit(i);
+    if (r !== undefined) return r;
   }
   return -1;
 }
 
+// Busca una palabra suelta (Y/O) fuera de literales de cadena.
+// No basta \b de regex: "PREMIO Y TRAMPA" dentro de comillas partiría la condición.
+const WORD_CHAR = /[\wÁÉÍÓÚÜÑáéíóúüñ]/;
+function findWordIdx(str, word) {
+  const W = word.toUpperCase();
+  return scanOutsideStrings(str, 0, i => {
+    if (str.substring(i, i + W.length).toUpperCase() !== W) return undefined;
+    const before = i === 0 ? '' : str[i - 1];
+    const after  = str[i + W.length] || '';
+    return (!WORD_CHAR.test(before) && !WORD_CHAR.test(after)) ? i : undefined;
+  });
+}
+
 // Busca un operador de comparación fuera de literales de cadena.
 function findCompIdx(cond, op) {
-  let inStr = false, strChar = '';
-  for (let i = 1; i < cond.length; i++) {
-    const c = cond[i];
-    if (!inStr && (c === "'" || c === '"')) { inStr = true; strChar = c; continue; }
-    if (inStr && c === strChar) { inStr = false; continue; }
-    if (inStr) continue;
-    if (cond.substring(i, i + op.length) === op) return i;
-  }
-  return -1;
+  return scanOutsideStrings(cond, 1, i =>
+    cond.substring(i, i + op.length) === op ? i : undefined
+  );
 }
 
 // ── EJECUTOR ─────────────────────────────────────────
@@ -1069,184 +1109,186 @@ async function execute(lines, from, to) {
   while (i <= to) {
     await checkBudget();
 
-    const raw = lines[i] || '';
-    const line = tokenize(raw);
+    const line = tokenize(lines[i] || '');
     const UP = line.toUpperCase();
 
-    // comentario o vacío
-    if (!line || line.startsWith('//')) { i++; continue; }
+    // vacío, INICIO, o cierres de bloque (ya los consumen los finders)
+    if (!line || UP === 'INICIO' || /^(FIN_SI|FIN_MIENTRAS|FIN_PARA|SI NO)$/.test(UP)) { i++; continue; }
+    if (UP === 'FIN') break;
+    if (UP === 'TERMINAR' || UP.startsWith('TERMINAR ')) throw new Error('TERMINADO');
 
-    // INICIO / FIN
-    if (UP === 'INICIO') { i++; continue; }
-    if (UP === 'FIN')    { break; }
-
-    // TERMINAR programa (fin limpio, no error)
-    if (UP === 'TERMINAR' || UP.startsWith('TERMINAR ')) { throw new Error('TERMINADO'); }
-
-    // MOSTRAR
-    if (UP.startsWith('MOSTRAR ')) {
-      const arg = line.substring(8).trim();
-      consoleLine('▷  ' + String(evalExpr(arg)));
-      renderVars();
-      i++; continue;
-    }
-
-    // EMITIR
-    if (UP.startsWith('EMITIR ')) {
-      const arg = line.substring(7).trim();
-      consoleLine('📡  EMITIR: ' + evalExpr(arg), 'warn');
-      i++; continue;
-    }
-
-    // ACTIVAR
-    if (UP.startsWith('ACTIVAR ')) {
-      const arg = line.substring(8).trim().toUpperCase();
-      env[arg] = true;
-      consoleLine('⚡  ACTIVAR ' + arg, 'warn');
-      renderVars();
-      i++; continue;
-    }
-
-    // LEER
-    if (UP.startsWith('LEER ')) {
-      const varName = line.substring(5).trim().toUpperCase();
-      consoleLine('◆  LEER ' + varName + ':', 'input-prompt');
-      const val = await waitForInput(varName);
-      const num = parseFloat(val);
-      env[varName] = isNaN(num) ? (val.toUpperCase() === 'VERDADERO' ? true : val.toUpperCase() === 'FALSO' ? false : val) : num;
-      consoleLine('   ← ' + val, 'prompt-arrow');
-      renderVars();
-      i++; continue;
-    }
-
-    // PARA … EN [lista] HACER
-    const paraEnM = line.match(/^PARA\s+(\S+)\s+EN\s+\[([^\]]*)\]\s+HACER\s*$/i);
-    if (paraEnM) {
-      const varN = paraEnM[1].toUpperCase();
-      const items = paraEnM[2].split(',').map(s => {
-        const t = s.trim();
-        const num = parseFloat(t);
-        return isNaN(num) ? t : num;
-      });
-      const blockEnd = findBlockEnd(lines, i, 'FIN_PARA');
-      for (const item of items) {
-        await checkBudget();
-        env[varN] = item;
-        await execute(lines, i + 1, blockEnd - 1);
-      }
-      i = blockEnd + 1; continue;
-    }
-
-    // PARA … = inicio HASTA fin HACER
-    const paraHastaM = line.match(/^PARA\s+(\S+)\s*=\s*(.+?)\s+HASTA\s+(.+?)\s+HACER\s*$/i);
-    if (paraHastaM) {
-      const varN  = paraHastaM[1].toUpperCase();
-      const start = evalExpr(paraHastaM[2]);
-      const end2  = evalExpr(paraHastaM[3]);
-      const blockEnd = findBlockEnd(lines, i, 'FIN_PARA');
-      for (let v = parseFloat(start); v <= parseFloat(end2); v++) {
-        await checkBudget();
-        env[varN] = v;
-        await execute(lines, i + 1, blockEnd - 1);
-      }
-      i = blockEnd + 1; continue;
-    }
-
-    // MIENTRAS … HACER
-    const mienM = line.match(/^MIENTRAS\s+(.+?)\s+HACER\s*$/i);
-    if (mienM) {
-      const cond = mienM[1];
-      const blockEnd = findBlockEnd(lines, i, 'FIN_MIENTRAS');
-      let loopCount = 0;
-      while (evalCond(cond)) {
-        loopCount++;
-        if (loopCount > 1000) throw new Error('El bucle MIENTRAS ha iterado más de 1000 veces. Comprueba la condición de salida.');
-        await checkBudget();
-        await execute(lines, i + 1, blockEnd - 1);
-      }
-      i = blockEnd + 1; continue;
-    }
-
-    // SI … ENTONCES
-    const siM = line.match(/^SI\s+(.+?)\s+ENTONCES\s*$/i);
-    if (siM) {
-      const cond = siM[1];
-      const { thenEnd, elseStart, elseEnd } = findIfBlock(lines, i);
-      if (evalCond(cond)) {
-        await execute(lines, i + 1, thenEnd - 1);
-      } else if (elseStart >= 0) {
-        await execute(lines, elseStart + 1, elseEnd - 1);
-      }
-      i = elseEnd + 1; continue;
-    }
-
-    // FIN_SI / FIN_MIENTRAS / FIN_PARA — se ignoran (ya los consume el finder)
-    if (/^(FIN_SI|FIN_MIENTRAS|FIN_PARA|SI NO)$/i.test(UP)) { i++; continue; }
-
-    // ASIGNACIÓN   var = expr
-    const assignM = line.match(/^(\S+)\s*=\s*(.+)$/);
-    if (assignM) {
-      const k = assignM[1].toUpperCase();
-      // ignorar si empieza con palabra reservada
-      if (!['SI','FIN','PARA','MIENTRAS','LEER','MOSTRAR'].includes(k)) {
-        env[k] = evalExpr(assignM[2].trim());
-        renderVars();
-      }
-      i++; continue;
-    }
-
-    // línea no reconocida — avisar sin detener la ejecución, para que el
-    // alumno vea la errata en vez de preguntarse por qué "no hace nada"
-    consoleLine('⚠ Línea ' + (i + 1) + ' no reconocida (se ignora): ' + line, 'warn');
-    i++;
+    i = await execLine(lines, i, line, UP);
   }
 }
 
+// Ejecuta la instrucción de la línea i; devuelve el índice de la siguiente línea.
+async function execLine(lines, i, line, UP) {
+  if (UP.startsWith('MOSTRAR ')) return execMostrar(line, i);
+  if (UP.startsWith('EMITIR '))  return execEmitir(line, i);
+  if (UP.startsWith('ACTIVAR ')) return execActivar(line, i);
+  if (UP.startsWith('LEER '))    return execLeer(line, i);
+
+  const paraEnM = line.match(/^PARA\s+(\S+)\s+EN\s+\[([^\]]*)\]\s+HACER\s*$/i);
+  if (paraEnM) return execParaEn(lines, i, paraEnM);
+
+  const paraHastaM = line.match(/^PARA\s+(\S+)\s*=\s*(.+?)\s+HASTA\s+(.+?)\s+HACER\s*$/i);
+  if (paraHastaM) return execParaHasta(lines, i, paraHastaM);
+
+  const mienM = line.match(/^MIENTRAS\s+(.+?)\s+HACER\s*$/i);
+  if (mienM) return execMientras(lines, i, mienM[1]);
+
+  const siM = line.match(/^SI\s+(.+?)\s+ENTONCES\s*$/i);
+  if (siM) return execSi(lines, i, siM[1]);
+
+  const assignM = line.match(/^(\S+)\s*=\s*(.+)$/);
+  if (assignM) return execAsignacion(assignM, i);
+
+  // línea no reconocida — avisar sin detener la ejecución, para que el
+  // alumno vea la errata en vez de preguntarse por qué "no hace nada"
+  consoleLine('⚠ Línea ' + (i + 1) + ' no reconocida (se ignora): ' + line, 'warn');
+  return i + 1;
+}
+
+function execMostrar(line, i) {
+  consoleLine('▷  ' + String(evalExpr(line.substring(8).trim())));
+  renderVars();
+  return i + 1;
+}
+
+function execEmitir(line, i) {
+  consoleLine('📡  EMITIR: ' + evalExpr(line.substring(7).trim()), 'warn');
+  return i + 1;
+}
+
+function execActivar(line, i) {
+  const arg = line.substring(8).trim().toUpperCase();
+  env[arg] = true;
+  consoleLine('⚡  ACTIVAR ' + arg, 'warn');
+  renderVars();
+  return i + 1;
+}
+
+async function execLeer(line, i) {
+  const varName = line.substring(5).trim().toUpperCase();
+  consoleLine('◆  LEER ' + varName + ':', 'input-prompt');
+  const val = await waitForInput();
+  env[varName] = parseInputValue(val);
+  consoleLine('   ← ' + val, 'prompt-arrow');
+  renderVars();
+  return i + 1;
+}
+
+// Número si lo parece; VERDADERO/FALSO como booleano; texto en otro caso.
+function parseInputValue(val) {
+  const num = Number.parseFloat(val);
+  if (!Number.isNaN(num)) return num;
+  const up = val.toUpperCase();
+  if (up === 'VERDADERO') return true;
+  if (up === 'FALSO') return false;
+  return val;
+}
+
+async function execParaEn(lines, i, m) {
+  const varN = m[1].toUpperCase();
+  const items = m[2].split(',').map(parseListItem);
+  const blockEnd = findBlockEnd(lines, i, 'FIN_PARA');
+  for (const item of items) {
+    await checkBudget();
+    env[varN] = item;
+    await execute(lines, i + 1, blockEnd - 1);
+  }
+  return blockEnd + 1;
+}
+
+function parseListItem(s) {
+  const t = s.trim();
+  const num = Number.parseFloat(t);
+  return Number.isNaN(num) ? t : num;
+}
+
+async function execParaHasta(lines, i, m) {
+  const varN  = m[1].toUpperCase();
+  const start = Number.parseFloat(evalExpr(m[2]));
+  const end   = Number.parseFloat(evalExpr(m[3]));
+  const blockEnd = findBlockEnd(lines, i, 'FIN_PARA');
+  for (let v = start; v <= end; v++) {
+    await checkBudget();
+    env[varN] = v;
+    await execute(lines, i + 1, blockEnd - 1);
+  }
+  return blockEnd + 1;
+}
+
+async function execMientras(lines, i, cond) {
+  const blockEnd = findBlockEnd(lines, i, 'FIN_MIENTRAS');
+  let loopCount = 0;
+  while (evalCond(cond)) {
+    loopCount++;
+    if (loopCount > 1000) throw new Error('El bucle MIENTRAS ha iterado más de 1000 veces. Comprueba la condición de salida.');
+    await checkBudget();
+    await execute(lines, i + 1, blockEnd - 1);
+  }
+  return blockEnd + 1;
+}
+
+async function execSi(lines, i, cond) {
+  const { thenEnd, elseStart, elseEnd } = findIfBlock(lines, i);
+  if (evalCond(cond)) {
+    await execute(lines, i + 1, thenEnd - 1);
+  } else if (elseStart >= 0) {
+    await execute(lines, elseStart + 1, elseEnd - 1);
+  }
+  return elseEnd + 1;
+}
+
+function execAsignacion(m, i) {
+  const k = m[1].toUpperCase();
+  // ignorar si empieza con palabra reservada
+  if (!['SI', 'FIN', 'PARA', 'MIENTRAS', 'LEER', 'MOSTRAR'].includes(k)) {
+    env[k] = evalExpr(m[2].trim());
+    renderVars();
+  }
+  return i + 1;
+}
+
 // ── UTILIDADES DE BLOQUES ────────────────────────────
+
+// Si la línea abre un bloque (PARA/MIENTRAS/SI), devuelve su cierre; si no, null.
+function blockCloserFor(t) {
+  if (/^PARA\s+\S/.test(t) && /\sHACER\s*$/.test(t)) return 'FIN_PARA';
+  if (/^MIENTRAS\s+/.test(t) && /\sHACER\s*$/.test(t)) return 'FIN_MIENTRAS';
+  if (/^SI\s+/.test(t) && /\sENTONCES\s*$/.test(t)) return 'FIN_SI';
+  return null;
+}
+
+// Pila de cierres pendientes: cada bloque anidado empuja su propio cierre y
+// solo ese cierre lo desapila, de modo que un SI...FIN_SI anidado dentro de un
+// PARA/MIENTRAS no descuadra la búsqueda del FIN_PARA/FIN_MIENTRAS exterior.
 function findBlockEnd(lines, from, endKeyword) {
-  // Pila de cierres pendientes: cada bloque anidado (PARA/MIENTRAS/SI) empuja
-  // su propio cierre y solo ese cierre lo desapila. Antes se llevaba una única
-  // cuenta de profundidad para cualquier apertura (incluido SI), pero un SI
-  // anidado dentro de un PARA/MIENTRAS incrementaba esa cuenta sin que su
-  // FIN_SI la decrementara nunca (solo decrementa el FIN_PARA/FIN_MIENTRAS
-  // buscado), así que el bloque se extendía hasta el final del fichero.
   const stack = [endKeyword.toUpperCase()];
   for (let i = from + 1; i < lines.length; i++) {
     const t = tokenize(lines[i]).toUpperCase();
-    const isParaOpen     = /^PARA\s+\S/.test(t) && /\sHACER\s*$/.test(t);
-    const isMientrasOpen = /^MIENTRAS\s+/.test(t) && /\sHACER\s*$/.test(t);
-    const isSiOpen       = /^SI\s+/.test(t) && /\sENTONCES\s*$/.test(t);
-
-    if (isParaOpen) stack.push('FIN_PARA');
-    else if (isMientrasOpen) stack.push('FIN_MIENTRAS');
-    else if (isSiOpen) stack.push('FIN_SI');
-    else if (t === 'FIN_PARA' || t === 'FIN_MIENTRAS' || t === 'FIN_SI') {
-      if (stack[stack.length - 1] === t) {
-        stack.pop();
-        if (stack.length === 0) return i;
-      }
+    const closer = blockCloserFor(t);
+    if (closer) {
+      stack.push(closer);
+    } else if (t === stack[stack.length - 1]) {
+      stack.pop();
+      if (stack.length === 0) return i;
     }
   }
   return lines.length - 1;
 }
 
 function findIfBlock(lines, siIdx) {
-  let depth = 0;
-  let thenEnd = -1, elseStart = -1, elseEnd = -1;
-  for (let i = siIdx; i < lines.length; i++) {
+  let depth = 1, elseStart = -1;
+  for (let i = siIdx + 1; i < lines.length; i++) {
     const t = tokenize(lines[i]).toUpperCase();
-    if (i === siIdx) { depth = 1; continue; }
-    if (/^SI\s.+ENTONCES\s*$/.test(t)) depth++;
-    if (depth === 1 && t === 'SI NO') {
-      thenEnd = i; elseStart = i;
-    }
-    if (t === 'FIN_SI') {
-      depth--;
-      if (depth === 0) {
-        if (elseStart < 0) thenEnd = i;
-        elseEnd = i;
-        return { thenEnd, elseStart, elseEnd };
-      }
+    if (/^SI\s.+ENTONCES\s*$/.test(t)) { depth++; continue; }
+    if (t === 'SI NO' && depth === 1) { elseStart = i; continue; }
+    if (t !== 'FIN_SI') continue;
+    depth--;
+    if (depth === 0) {
+      return { thenEnd: elseStart >= 0 ? elseStart : i, elseStart, elseEnd: i };
     }
   }
   return { thenEnd: lines.length - 1, elseStart: -1, elseEnd: lines.length - 1 };
@@ -1262,7 +1304,7 @@ function hideInput() {
   document.getElementById('input-row').classList.add('hidden');
 }
 
-function waitForInput(varName) {
+function waitForInput() {
   return new Promise(resolve => {
     resolveInput = resolve;
     showInput();
