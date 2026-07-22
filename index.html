@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PseudoIDE — Editor de Pseudocódigo</title>
+<style>
+  /* ── RESET & BASE ────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --surface2:  #21262d;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --green:     #39d353;
+    --green-dim: #1a4a2e;
+    --red:       #f85149;
+    --red-dim:   #3d1a1a;
+    --blue:      #58a6ff;
+    --blue-dim:  #1a2a4a;
+    --orange:    #ffa657;
+    --orange-dim:#3d2a10;
+    --purple:    #bc8cff;
+    --yellow:    #e3b341;
+    --accent:    #238636;
+    --accent-h:  #2ea043;
+    --radius:    6px;
+    --mono:      'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    --sans:      'Segoe UI', system-ui, sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── TOP BAR ────────────────────────────────────────── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .logo-icon {
+    width: 22px; height: 22px;
+    background: var(--green);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: #000; font-size: 12px; font-weight: 900;
+  }
+  .mission-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .mission-select label { color: var(--muted); font-size: 12px; }
+  select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+  }
+  select:focus { border-color: var(--blue); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px;
+    border: none; border-radius: var(--radius);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, transform 0.1s;
+    font-family: var(--sans);
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-run {
+    background: var(--accent); color: #fff;
+  }
+  .btn-run:hover { background: var(--accent-h); }
+  .btn-clear {
+    background: var(--surface2); color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-clear:hover { color: var(--text); border-color: var(--muted); }
+  .btn-reset {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-reset:hover { color: var(--red); border-color: var(--red); }
+  .btn-stop {
+    background: var(--red-dim); color: var(--red);
+    border: 1px solid var(--red);
+  }
+  .btn-stop:hover:not(:disabled) { background: var(--red); color: #fff; }
+  .btn-stop:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── SNIPPET BAR ─────────────────────────────────────── */
+  .snippetbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .snippetbar-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-right: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .snip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .snip:hover { border-color: var(--green); color: var(--green); }
+  .snip.kw-cond  { border-color: #30363d; }
+  .snip.kw-cond:hover  { border-color: var(--yellow); color: var(--yellow); }
+  .snip.kw-loop  { border-color: #30363d; }
+  .snip.kw-loop:hover  { border-color: var(--orange); color: var(--orange); }
+  .snip.kw-io    { border-color: #30363d; }
+  .snip.kw-io:hover    { border-color: var(--purple); color: var(--purple); }
+
+  /* ── MAIN LAYOUT ─────────────────────────────────────── */
+  .workspace {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  /* ── EDITOR PANEL ────────────────────────────────────── */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+  .panel-header {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 14px;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel-header .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot-green { background: var(--green); }
+  .dot-blue  { background: var(--blue); }
+  .dot-red   { background: var(--red); }
+
+  .editor-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+  }
+  .line-numbers {
+    padding: 12px 8px 12px 12px;
+    background: var(--surface);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    text-align: right;
+    user-select: none;
+    min-width: 42px;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+    white-space: pre;
+  }
+  #editor {
+    flex: 1;
+    background: var(--surface);
+    color: var(--text);
+    border: none;
+    outline: none;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    padding: 12px 14px;
+    resize: none;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow: auto;
+    tab-size: 2;
+    caret-color: var(--green);
+  }
+  #editor::selection { background: rgba(56,211,83,0.2); }
+
+  /* ── OUTPUT PANEL ────────────────────────────────────── */
+  .output-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .console {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    scroll-behavior: smooth;
+  }
+  .console-line { margin-bottom: 2px; }
+  .console-line.out    { color: var(--text); }
+  .console-line.info   { color: var(--muted); font-style: italic; }
+  .console-line.ok     { color: var(--green); }
+  .console-line.err    { color: var(--red); }
+  .console-line.warn   { color: var(--yellow); }
+  .console-line.input-prompt { color: var(--blue); }
+  .console-line.prompt-arrow { color: var(--green); }
+  .console-line.header { color: var(--purple); font-weight: bold; }
+
+  /* input en consola */
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--surface2);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .input-row label { color: var(--blue); font-family: var(--mono); font-size: 13px; }
+  #runtime-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--blue);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    outline: none;
+    padding: 2px 4px;
+  }
+  #send-input {
+    background: var(--blue-dim);
+    border: 1px solid var(--blue);
+    color: var(--blue);
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--sans);
+  }
+  #send-input:hover { background: var(--blue); color: #000; }
+  .input-row.hidden { display: none; }
+
+  /* variables watch */
+  .vars-panel {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 8px 16px;
+    max-height: 120px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .vars-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .vars-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .var-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2px 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .var-chip .var-name { color: var(--orange); }
+  .var-chip .var-eq   { color: var(--muted); }
+  .var-chip .var-val  { color: var(--green); }
+
+  /* statusbar */
+  .statusbar {
+    background: var(--surface2);
+    border-top: 1px solid var(--border);
+    padding: 3px 14px;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 16px;
+    flex-shrink: 0;
+    align-items: center;
+  }
+  #status-msg { margin-left: auto; }
+  #status-msg.ok  { color: var(--green); }
+  #status-msg.err { color: var(--red); }
+  #status-msg.run { color: var(--yellow); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">P/</div>
+    PseudoIDE
+  </div>
+  <div class="mission-select">
+    <label>Cargar misión:</label>
+    <select id="mission-picker">
+      <option value="">— Ejemplo en blanco —</option>
+      <option value="escape">🔐 Misión #1: Escape Room</option>
+      <option value="nave">🚀 Misión #2: Nave Espacial</option>
+      <option value="cena">🎄 Misión #3: La Cena de Navidad</option>
+    </select>
+  </div>
+  <button class="btn btn-reset" onclick="resetEditor()">Limpiar</button>
+  <button class="btn btn-run" onclick="runCode()">▶ Ejecutar</button>
+  <button class="btn btn-stop" id="btn-stop" onclick="stopExecution()" disabled>⏹ Detener</button>
+</div>
+
+<!-- SNIPPET BAR -->
+<div class="snippetbar">
+  <span class="snippetbar-label">Insertar:</span>
+  <span class="snip" onclick="insertSnip('INICIO\n  \nFIN')">INICIO…FIN</span>
+  <span class="snip kw-cond" onclick="insertSnip('SI  ENTONCES\n  \nFIN_SI')">SI…ENTONCES</span>
+  <span class="snip kw-cond" onclick="insertSnip('SI  ENTONCES\n  \nSI NO\n  \nFIN_SI')">SI…SI NO</span>
+  <span class="snip kw-loop" onclick="insertSnip('MIENTRAS  HACER\n  \nFIN_MIENTRAS')">MIENTRAS…HACER</span>
+  <span class="snip kw-loop" onclick="insertSnip('PARA  EN [] HACER\n  \nFIN_PARA')">PARA…EN</span>
+  <span class="snip kw-loop" onclick="insertSnip('PARA  = 1 HASTA  HACER\n  \nFIN_PARA')">PARA…HASTA</span>
+  <span class="snip kw-io" onclick="insertSnip('LEER ')">LEER</span>
+  <span class="snip kw-io" onclick="insertSnip('MOSTRAR \'\'')">MOSTRAR</span>
+  <span class="snip kw-io" onclick="insertSnip('CALCULAR ')">CALCULAR</span>
+  <span class="snip kw-io" onclick="insertSnip('GUARDAR ')">GUARDAR</span>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+
+  <!-- EDITOR -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="dot dot-green"></span>
+      Editor de pseudocódigo
+      <span style="margin-left:auto;font-size:10px" id="line-col">L1 C1</span>
+    </div>
+    <div class="editor-wrap">
+      <div class="line-numbers" id="line-numbers">1</div>
+      <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off"
+        placeholder="Escribe tu pseudocódigo aquí...
+Pulsa ▶ Ejecutar para ver el resultado."></textarea>
+    </div>
+    <div class="statusbar">
+      <span id="line-count">0 líneas</span>
+      <span id="status-msg"></span>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="output-panel">
+    <div class="panel-header">
+      <span class="dot dot-blue"></span>
+      Consola de salida
+      <button class="btn btn-clear" style="margin-left:auto;padding:2px 8px;font-size:11px" onclick="clearConsole()">Borrar</button>
+    </div>
+    <div class="console" id="console">
+      <div class="console-line info">// PseudoIDE listo. Escribe tu pseudocódigo y pulsa ▶ Ejecutar.</div>
+      <div class="console-line info">// Usa los botones de la barra superior para cargar una misión de ejemplo.</div>
+    </div>
+    <div class="input-row hidden" id="input-row">
+      <label>→ Introduce valor:</label>
+      <input type="text" id="runtime-input" placeholder="escribe aquí y pulsa Enter…" />
+      <button id="send-input" onclick="sendInput()">OK</button>
+    </div>
+    <div class="vars-panel" id="vars-panel" style="display:none">
+      <div class="vars-title">Variables</div>
+      <div class="vars-grid" id="vars-grid"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  MISIONES PRECARGADAS
+// ═══════════════════════════════════════════════════════
+const MISSIONS = {
+escape: `// 🔐 MISIÓN #1: ESCAPE ROOM ALGORÍTMICO
+// Completa el pseudocódigo para escapar de la sala.
+
+INICIO
+  intentos        = 0
+  premios         = 0
+  puerta_cerrada  = VERDADERO
+  código_correcto = FALSO
+
+  // Paso 1: Revisar las 5 cajas (PARA + condición)
+  PARA caja EN [PREMIO, TRAMPA, PREMIO, PREMIO, TRAMPA] HACER
+    SI caja = PREMIO ENTONCES
+      premios = premios + 1
+      MOSTRAR 'Premio encontrado. Total: ' + premios
+    SI NO
+      MOSTRAR '¡Trampa! Caja con bomba 💣'
+    FIN_SI
+  FIN_PARA
+
+  // Paso 2: Intentos de código (MIENTRAS + condición)
+  MIENTRAS intentos < 3 Y puerta_cerrada HACER
+    LEER código_introducido
+    SI código_introducido = 4712 ENTONCES
+      código_correcto = VERDADERO
+      puerta_cerrada  = FALSO
+    SI NO
+      intentos = intentos + 1
+      MOSTRAR 'Código incorrecto. Intentos restantes: ' + (3 - intentos)
+    FIN_SI
+  FIN_MIENTRAS
+
+  // Paso 3: ¿Se abre la puerta?
+  SI intentos >= 3 Y puerta_cerrada ENTONCES
+    MOSTRAR '🚨 ALARMA ACTIVADA — 3 intentos fallidos'
+  SI NO
+    SI código_correcto Y premios >= 3 ENTONCES
+      MOSTRAR '🎉 ¡ESCAPADOS! Premios recogidos: ' + premios
+    SI NO
+      MOSTRAR '❌ Premios insuficientes: ' + premios + ' de 3'
+    FIN_SI
+  FIN_SI
+
+FIN`,
+
+nave: `// 🚀 MISIÓN #2: CONTROL DE LA NAVE ESPACIAL
+// Escribe el protocolo de aterrizaje de la nave ALGO-1.
+
+INICIO
+  combustible     = 100
+  altitud         = 100
+  temperatura     = 650
+  escudos_activos = FALSO
+
+  MOSTRAR '=== INICIANDO PROTOCOLO DE DESCENSO ==='
+  MOSTRAR 'Altitud inicial: ' + altitud + ' km'
+  MOSTRAR 'Combustible inicial: ' + combustible + ' u.'
+
+  // Bucle de descenso
+  MIENTRAS altitud > 0 Y combustible > 0 HACER
+    altitud      = altitud - 10
+    combustible  = combustible - 5
+    temperatura  = temperatura + 50
+
+    SI temperatura > 800 ENTONCES
+      escudos_activos = VERDADERO
+      MOSTRAR '🔥 Temp crítica (' + temperatura + '°) — Escudos activados'
+    SI NO
+      escudos_activos = FALSO
+    FIN_SI
+
+    MOSTRAR 'Altitud: ' + altitud + ' km | Combustible: ' + combustible + ' u.'
+  FIN_MIENTRAS
+
+  // Resultado del aterrizaje
+  SI altitud = 0 ENTONCES
+    MOSTRAR '🎉 ¡ATERRIZAJE EXITOSO EN BUCLE-7! Tripulación a salvo.'
+  SI NO
+    MOSTRAR '⚠️ EMERGENCIA: combustible agotado a ' + altitud + ' km'
+  FIN_SI
+
+FIN`,
+
+cena: `// 🎄 MISIÓN #3: LA CENA DE NAVIDAD (SUPERVIVENCIA FAMILIAR)
+// 6 rondas, 3 opciones cada una. En cada ronda escribe 1, 2 o 3 en el cuadro
+// de entrada y pulsa Enter/OK. Tus 6 decisiones deciden qué final te toca.
+
+INICIO
+  fuerza  = 0
+  astucia = 0
+  labia   = 0
+
+  MOSTRAR '=== LA CENA DE NAVIDAD: SEIS ASALTOS DE SUPERVIVENCIA ==='
+  MOSTRAR 'En cada ronda escribe 1, 2 o 3 según lo que harías. No hay opción incorrecta... o sí.'
+
+  PARA turno = 1 HASTA 6 HACER
+
+    SI turno = 1 ENTONCES
+      MOSTRAR '--- RONDA 1: El tío Roberto empieza con la política en la mesa ---'
+      MOSTRAR '1) Le paras los pies con datos'
+      MOSTRAR '2) Vas a por más pan y no vuelves'
+      MOSTRAR '3) Le sigues el rollo sin tener ni idea'
+    FIN_SI
+
+    SI turno = 2 ENTONCES
+      MOSTRAR '--- RONDA 2: La abuela pregunta (sexta vez) cuándo sientas cabeza ---'
+      MOSTRAR '1) Respondes con humor afilado'
+      MOSTRAR '2) Cambias de tema de sopetón'
+      MOSTRAR '3) Prometes nietos para el año que viene'
+    FIN_SI
+
+    SI turno = 3 ENTONCES
+      MOSTRAR '--- RONDA 3: El primo pequeño derrama el turrón sobre el mantel bueno ---'
+      MOSTRAR '1) Le riñes delante de todos'
+      MOSTRAR '2) Lo limpias a escondidas antes de que se note'
+      MOSTRAR '3) Dices "ya estaba así" para quitar hierro'
+    FIN_SI
+
+    SI turno = 4 ENTONCES
+      MOSTRAR '--- RONDA 4: Tu cuñado presume de su negocio de criptomonedas ---'
+      MOSTRAR '1) Le rebates con números'
+      MOSTRAR '2) Finges una llamada urgente y desapareces'
+      MOSTRAR '3) Le das la razón en todo para que se calle antes'
+    FIN_SI
+
+    SI turno = 5 ENTONCES
+      MOSTRAR '--- RONDA 5: Queda un único trozo de turrón y nadie lo admite ---'
+      MOSTRAR '1) Lo coges tú sin preguntar'
+      MOSTRAR '2) Finges que no te gusta el turrón'
+      MOSTRAR '3) Lo partes en trocitos y repartes quedando de maravilla'
+    FIN_SI
+
+    SI turno = 6 ENTONCES
+      MOSTRAR '--- RONDA 6: Alguien saca las fotos vergonzosas de cuando eras pequeño ---'
+      MOSTRAR '1) Las escondes por la fuerza'
+      MOSTRAR '2) Te ríes nervioso y cambias de tema'
+      MOSTRAR '3) Te ríes con ellos y cuentas tú la anécdota'
+    FIN_SI
+
+    LEER opcion
+
+    SI opcion = 1 ENTONCES
+      fuerza = fuerza + 1
+      MOSTRAR 'Vaya carácter. Se hace un silencio incómodo en la mesa.'
+    SI NO
+      SI opcion = 2 ENTONCES
+        astucia = astucia + 1
+        MOSTRAR 'Escapada de manual. Nadie se ha dado ni cuenta.'
+      SI NO
+        labia = labia + 1
+        MOSTRAR 'Con esa labia podrías vender arena en el desierto.'
+      FIN_SI
+    FIN_SI
+
+  FIN_PARA
+
+  MOSTRAR '=== RESULTADOS DE LA CENA ==='
+  MOSTRAR 'Fuerza: ' + fuerza + ' | Astucia: ' + astucia + ' | Labia: ' + labia
+
+  SI fuerza > astucia Y fuerza > labia ENTONCES
+    MOSTRAR '🥊 SUPERVIVIENTE POR LA FUERZA BRUTA: has plantado cara a toda la familia. Eres el más valiente... y el año que viene no te invitan.'
+  SI NO
+    SI astucia > fuerza Y astucia > labia ENTONCES
+      MOSTRAR '🥷 EL FANTASMA DE LA CENA: te has escaqueado tan bien de todo que nadie recuerda si estuviste allí.'
+    SI NO
+      SI labia > fuerza Y labia > astucia ENTONCES
+        MOSTRAR '🎭 EL DIPLOMÁTICO DEL AÑO: has salido de todos los marrones con una sonrisa. Integridad emocional: dudosa. Popularidad: máxima.'
+      SI NO
+        MOSTRAR '🎪 EL COMODÍN FAMILIAR: un poco de todo, nada en exceso. El equilibrio perfecto para sobrevivir otra Navidad más.'
+      FIN_SI
+    FIN_SI
+  FIN_SI
+
+FIN`
+};
+
+// ═══════════════════════════════════════════════════════
+//  EDITOR — líneas y columna
+// ═══════════════════════════════════════════════════════
+const editor = document.getElementById('editor');
+const lineNumbers = document.getElementById('line-numbers');
+const lineCol = document.getElementById('line-col');
+const lineCount = document.getElementById('line-count');
+
+function updateLineNumbers() {
+  const lines = editor.value.split('\n');
+  lineNumbers.innerHTML = lines.map((_, i) => i + 1).join('\n');
+  lineCount.textContent = lines.length + ' líneas';
+}
+
+function updateCursor() {
+  const txt = editor.value.substring(0, editor.selectionStart);
+  const lines = txt.split('\n');
+  lineCol.textContent = `L${lines.length} C${lines[lines.length-1].length + 1}`;
+}
+
+editor.addEventListener('input', updateLineNumbers);
+editor.addEventListener('keyup', updateCursor);
+editor.addEventListener('click', updateCursor);
+
+editor.addEventListener('scroll', () => {
+  lineNumbers.scrollTop = editor.scrollTop;
+});
+
+editor.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = editor.selectionStart, end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, s) + '  ' + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = s + 2;
+    updateLineNumbers();
+  }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    // autoindent
+    const s = editor.selectionStart;
+    const txt = editor.value.substring(0, s);
+    const lastLine = txt.split('\n').pop();
+    const indent = lastLine.match(/^(\s*)/)[1];
+    // aumentar indent si termina en HACER/ENTONCES/INICIO
+    const trimmed = lastLine.trim().toUpperCase();
+    const extra = /HACER$|ENTONCES$|^INICIO$|^SI NO$/.test(trimmed) ? '  ' : '';
+    setTimeout(() => {
+      const ns = editor.selectionStart;
+      const before = editor.value.substring(0, ns);
+      const after  = editor.value.substring(ns);
+      editor.value = before + indent + extra + after;
+      editor.selectionStart = editor.selectionEnd = ns + indent.length + extra.length;
+      updateLineNumbers();
+    }, 0);
+  }
+});
+
+function insertSnip(text) {
+  const s = editor.selectionStart, e2 = editor.selectionEnd;
+  editor.value = editor.value.substring(0, s) + text + editor.value.substring(e2);
+  editor.selectionStart = editor.selectionEnd = s + text.length;
+  editor.focus();
+  updateLineNumbers();
+}
+
+function resetEditor() {
+  editor.value = '';
+  document.getElementById('mission-picker').value = '';
+  updateLineNumbers();
+  clearConsole();
+  document.getElementById('vars-panel').style.display = 'none';
+  setStatus('', '');
+}
+
+document.getElementById('mission-picker').addEventListener('change', function() {
+  if (this.value && MISSIONS[this.value]) {
+    editor.value = MISSIONS[this.value];
+    updateLineNumbers();
+    clearConsole();
+    document.getElementById('vars-panel').style.display = 'none';
+    setStatus('Misión cargada', 'ok');
+  }
+});
+
+updateLineNumbers();
+
+// ═══════════════════════════════════════════════════════
+//  CONSOLA
+// ═══════════════════════════════════════════════════════
+const cons = document.getElementById('console');
+
+function consoleLine(text, cls='out') {
+  const d = document.createElement('div');
+  d.className = 'console-line ' + cls;
+  d.textContent = text;
+  cons.appendChild(d);
+  cons.scrollTop = cons.scrollHeight;
+}
+
+function clearConsole() {
+  cons.innerHTML = '';
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.className = cls;
+}
+
+// ═══════════════════════════════════════════════════════
+//  INTÉRPRETE DE PSEUDOCÓDIGO
+// ═══════════════════════════════════════════════════════
+
+// Estado global de ejecución
+let env = {};           // variables
+let inputQueue = [];    // valores pendientes de LEER
+let resolveInput = null;// promesa para input interactivo
+let isRunning = false;
+let totalSteps = 0;         // pasos ejecutados en esta corrida (todas las llamadas anidadas)
+const STEP_LIMIT = 200000;  // tope global anti bucle infinito
+const YIELD_EVERY = 200;    // cada N pasos cedemos el hilo para no bloquear el navegador
+let stopRequested = false;
+
+// Se llama en cada paso interpretado (líneas, iteraciones de PARA/MIENTRAS).
+// Cuenta el total real de trabajo (antes cada llamada recursiva a execute()
+// reiniciaba su propio contador, así que un PARA...HASTA con un rango enorme
+// nunca activaba ningún límite) y cede el hilo periódicamente con un
+// setTimeout real para que el navegador pueda repintar y atender al botón
+// "Detener" en vez de quedarse bloqueado ejecutando microtasks sin parar.
+async function checkBudget() {
+  totalSteps++;
+  if (stopRequested) throw new Error('STOPPED');
+  if (totalSteps > STEP_LIMIT) {
+    throw new Error('Límite de ' + STEP_LIMIT + ' pasos alcanzado (posible bucle infinito). Ejecución detenida.');
+  }
+  if (totalSteps % YIELD_EVERY === 0) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+}
+
+function renderVars() {
+  const panel = document.getElementById('vars-panel');
+  const grid  = document.getElementById('vars-grid');
+  const keys  = Object.keys(env);
+  if (keys.length === 0) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  grid.innerHTML = keys.map(k =>
+    `<div class="var-chip"><span class="var-name">${k}</span><span class="var-eq"> = </span><span class="var-val">${JSON.stringify(env[k])}</span></div>`
+  ).join('');
+}
+
+// ── TOKENIZER ────────────────────────────────────────
+function tokenize(line) {
+  // quitar comentarios //
+  const ci = line.indexOf('//');
+  if (ci >= 0) line = line.substring(0, ci);
+  return line.trim();
+}
+
+// ── EVALUADOR DE EXPRESIONES ─────────────────────────
+function isNumVal(v) {
+  return typeof v === 'number';
+}
+
+function evalExpr(expr) {
+  expr = expr.trim();
+  if (!expr) return '';
+
+  // booleano VERDADERO/FALSO
+  if (/^VERDADERO$/i.test(expr)) return true;
+  if (/^FALSO$/i.test(expr)) return false;
+
+  // separar por + respetando strings, paréntesis y corchetes.
+  // Esto va ANTES del chequeo de "string literal" de abajo: la regex
+  // ^'(.*)'$ es ávida y, en algo como 'texto ' + var + ' más', capturaría
+  // desde la primera comilla hasta la última como si todo fuera un único
+  // literal, tragándose la concatenación entera.
+  const plusParts = splitByOp(expr, '+');
+  if (plusParts.length > 1) {
+    const vals = plusParts.map(p => evalExpr(p.trim()));
+    // si todos son numéricos → suma
+    if (vals.every(v => isNumVal(v))) {
+      return vals.reduce((a, b) => a + b, 0);
+    }
+    // si alguno es string → concatenación
+    return vals.map(v => {
+      if (typeof v === 'boolean') return v ? 'VERDADERO' : 'FALSO';
+      return String(v);
+    }).join('');
+  }
+
+  // string literal 'texto' o "texto"
+  const strM = expr.match(/^'(.*)'$/s) || expr.match(/^"(.*)"$/s);
+  if (strM) return strM[1];
+
+  // número literal
+  if (/^-?\d+(\.\d+)?$/.test(expr)) return parseFloat(expr);
+
+  // paréntesis envolventes
+  if (expr.startsWith('(') && expr.endsWith(')') && matchingClose(expr, 0) === expr.length - 1) {
+    return evalExpr(expr.slice(1, -1).trim());
+  }
+
+  // operadores - * / (derecha a izquierda para precedencia)
+  for (const op of ['-', '*', '/']) {
+    const idx = findOpIdx(expr, op);
+    if (idx > 0) {
+      const lv = evalExpr(expr.substring(0, idx).trim());
+      const rv = evalExpr(expr.substring(idx + 1).trim());
+      const ln = parseFloat(lv), rn = parseFloat(rv);
+      if (op === '-') return ln - rn;
+      if (op === '*') return ln * rn;
+      if (op === '/') return rn !== 0 ? ln / rn : 'ERROR_DIV0';
+    }
+  }
+
+  // variable (buscar en env con nombre en mayúsculas)
+  const k = expr.toUpperCase();
+  if (k in env) return env[k];
+  if (expr in env) return env[expr];
+
+  return expr; // literal no reconocido, devolver tal cual
+}
+
+function matchingClose(str, open) {
+  const cl = str[open] === '(' ? ')' : ']';
+  let depth = 0;
+  for (let i = open; i < str.length; i++) {
+    if (str[i] === str[open]) depth++;
+    if (str[i] === cl) { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+function splitByOp(expr, op) {
+  const parts = [];
+  let depth = 0, inStr = false, strChar = '', cur = '';
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i];
+    if (!inStr && (c === "'" || c === '"')) { inStr = true; strChar = c; cur += c; continue; }
+    if (inStr && c === strChar) { inStr = false; cur += c; continue; }
+    if (inStr) { cur += c; continue; }
+    if (c === '(' || c === '[') { depth++; cur += c; continue; }
+    if (c === ')' || c === ']') { depth--; cur += c; continue; }
+    if (depth === 0 && c === op) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  parts.push(cur);
+  return parts.length > 1 ? parts : [expr];
+}
+
+function findOpIdx(expr, op) {
+  let depth = 0, inStr = false, strChar = '';
+  for (let i = expr.length - 1; i >= 1; i--) {
+    const c = expr[i];
+    if (!inStr && (c === "'" || c === '"')) { inStr = !inStr; strChar = c; continue; }
+    if (inStr) continue;
+    if (c === ')' || c === ']') depth++;
+    if (c === '(' || c === '[') depth--;
+    if (!depth && c === op) return i;
+  }
+  return -1;
+}
+
+
+// ── EVALUADOR DE CONDICIONES ─────────────────────────
+function evalCond(cond) {
+  cond = cond.trim();
+
+  // Y / O lógicos
+  const andIdx = indexOfWord(cond, 'Y');
+  if (andIdx >= 0) {
+    return evalCond(cond.substring(0, andIdx)) && evalCond(cond.substring(andIdx + 2));
+  }
+  const orIdx = indexOfWord(cond, 'O');
+  if (orIdx >= 0) {
+    return evalCond(cond.substring(0, orIdx)) || evalCond(cond.substring(orIdx + 2));
+  }
+
+  // comparadores
+  for (const op of ['>=', '<=', '<>', '!=', '=', '>', '<']) {
+    const idx = cond.indexOf(op);
+    if (idx > 0) {
+      const lv = evalExpr(cond.substring(0, idx).trim());
+      const rv = evalExpr(cond.substring(idx + op.length).trim());
+      const ln = parseFloat(lv), rn = parseFloat(rv);
+      if (op === '=')  return String(lv).toUpperCase() === String(rv).toUpperCase();
+      if (op === '>=') return ln >= rn;
+      if (op === '<=') return ln <= rn;
+      if (op === '>')  return ln > rn;
+      if (op === '<')  return ln < rn;
+      if (op === '<>' || op === '!=') return String(lv) !== String(rv);
+    }
+  }
+
+  // booleano directo
+  const v = evalExpr(cond);
+  if (typeof v === 'boolean') return v;
+  const vs = String(v).toUpperCase();
+  return vs === 'VERDADERO' || vs === 'TRUE' || vs === '1';
+}
+
+function indexOfWord(str, word) {
+  const re = new RegExp('\\b' + word + '\\b', 'i');
+  const m = re.exec(str);
+  return m ? m.index : -1;
+}
+
+// ── EJECUTOR ─────────────────────────────────────────
+async function runCode() {
+  if (isRunning) return;
+  isRunning = true;
+  env = {};
+  inputQueue = [];
+  totalSteps = 0;
+  stopRequested = false;
+  clearConsole();
+  setStatus('Ejecutando…', 'run');
+  document.getElementById('btn-stop').disabled = false;
+
+  const raw = editor.value;
+  const lines = raw.split('\n');
+
+  try {
+    await execute(lines, 0, lines.length - 1);
+    consoleLine('', 'info');
+    consoleLine('─── Ejecución completada ───', 'ok');
+    setStatus('Completado', 'ok');
+  } catch(e) {
+    if (e.message === 'INPUT_NEEDED') {
+      // ya está esperando, no hacer nada
+    } else if (e.message === 'STOPPED') {
+      consoleLine('⏹ Ejecución detenida por el usuario.', 'warn');
+      setStatus('Detenido', 'err');
+    } else {
+      consoleLine('⚠ Error: ' + e.message, 'err');
+      setStatus('Error', 'err');
+    }
+  }
+
+  renderVars();
+  hideInput();
+  isRunning = false;
+  document.getElementById('btn-stop').disabled = true;
+}
+
+function stopExecution() {
+  stopRequested = true;
+  // si está esperando un LEER, hay que desbloquear la promesa para que
+  // el siguiente checkBudget() pueda lanzar STOPPED y cortar la ejecución
+  if (resolveInput) { resolveInput('0'); resolveInput = null; }
+}
+
+async function execute(lines, from, to) {
+  let i = from;
+
+  while (i <= to) {
+    await checkBudget();
+
+    const raw = lines[i] || '';
+    const line = tokenize(raw);
+    const UP = line.toUpperCase();
+
+    // comentario o vacío
+    if (!line || line.startsWith('//')) { i++; continue; }
+
+    // INICIO / FIN
+    if (UP === 'INICIO') { i++; continue; }
+    if (UP === 'FIN')    { break; }
+
+    // TERMINAR programa
+    if (UP.startsWith('TERMINAR')) { throw new Error('TERMINAR'); }
+
+    // MOSTRAR
+    if (UP.startsWith('MOSTRAR ')) {
+      const arg = line.substring(8).trim();
+      consoleLine('▷  ' + String(evalExpr(arg)));
+      renderVars();
+      i++; continue;
+    }
+
+    // EMITIR
+    if (UP.startsWith('EMITIR ')) {
+      const arg = line.substring(7).trim();
+      consoleLine('📡  EMITIR: ' + evalExpr(arg), 'warn');
+      i++; continue;
+    }
+
+    // ACTIVAR
+    if (UP.startsWith('ACTIVAR ')) {
+      const arg = line.substring(8).trim().toUpperCase();
+      env[arg] = true;
+      consoleLine('⚡  ACTIVAR ' + arg, 'warn');
+      renderVars();
+      i++; continue;
+    }
+
+    // LEER
+    if (UP.startsWith('LEER ')) {
+      const varName = line.substring(5).trim().toUpperCase();
+      consoleLine('◆  LEER ' + varName + ':', 'input-prompt');
+      const val = await waitForInput(varName);
+      const num = parseFloat(val);
+      env[varName] = isNaN(num) ? (val.toUpperCase() === 'VERDADERO' ? true : val.toUpperCase() === 'FALSO' ? false : val) : num;
+      consoleLine('   ← ' + val, 'prompt-arrow');
+      renderVars();
+      i++; continue;
+    }
+
+    // PARA … EN [lista] HACER
+    const paraEnM = line.match(/^PARA\s+(\S+)\s+EN\s+\[([^\]]*)\]\s+HACER\s*$/i);
+    if (paraEnM) {
+      const varN = paraEnM[1].toUpperCase();
+      const items = paraEnM[2].split(',').map(s => {
+        const t = s.trim();
+        const num = parseFloat(t);
+        return isNaN(num) ? t : num;
+      });
+      const blockEnd = findBlockEnd(lines, i, 'FIN_PARA');
+      for (const item of items) {
+        await checkBudget();
+        env[varN] = item;
+        await execute(lines, i + 1, blockEnd - 1);
+      }
+      i = blockEnd + 1; continue;
+    }
+
+    // PARA … = inicio HASTA fin HACER
+    const paraHastaM = line.match(/^PARA\s+(\S+)\s*=\s*(.+?)\s+HASTA\s+(.+?)\s+HACER\s*$/i);
+    if (paraHastaM) {
+      const varN  = paraHastaM[1].toUpperCase();
+      const start = evalExpr(paraHastaM[2]);
+      const end2  = evalExpr(paraHastaM[3]);
+      const blockEnd = findBlockEnd(lines, i, 'FIN_PARA');
+      for (let v = parseFloat(start); v <= parseFloat(end2); v++) {
+        await checkBudget();
+        env[varN] = v;
+        await execute(lines, i + 1, blockEnd - 1);
+      }
+      i = blockEnd + 1; continue;
+    }
+
+    // MIENTRAS … HACER
+    const mienM = line.match(/^MIENTRAS\s+(.+?)\s+HACER\s*$/i);
+    if (mienM) {
+      const cond = mienM[1];
+      const blockEnd = findBlockEnd(lines, i, 'FIN_MIENTRAS');
+      let loopCount = 0;
+      while (evalCond(cond)) {
+        loopCount++;
+        if (loopCount > 1000) throw new Error('El bucle MIENTRAS ha iterado más de 1000 veces. Comprueba la condición de salida.');
+        await checkBudget();
+        await execute(lines, i + 1, blockEnd - 1);
+      }
+      i = blockEnd + 1; continue;
+    }
+
+    // SI … ENTONCES
+    const siM = line.match(/^SI\s+(.+?)\s+ENTONCES\s*$/i);
+    if (siM) {
+      const cond = siM[1];
+      const { thenEnd, elseStart, elseEnd } = findIfBlock(lines, i);
+      if (evalCond(cond)) {
+        await execute(lines, i + 1, thenEnd - 1);
+      } else if (elseStart >= 0) {
+        await execute(lines, elseStart + 1, elseEnd - 1);
+      }
+      i = elseEnd + 1; continue;
+    }
+
+    // FIN_SI / FIN_MIENTRAS / FIN_PARA — se ignoran (ya los consume el finder)
+    if (/^(FIN_SI|FIN_MIENTRAS|FIN_PARA|SI NO)$/i.test(UP)) { i++; continue; }
+
+    // ASIGNACIÓN   var = expr
+    const assignM = line.match(/^(\S+)\s*=\s*(.+)$/);
+    if (assignM) {
+      const k = assignM[1].toUpperCase();
+      // ignorar si empieza con palabra reservada
+      if (!['SI','FIN','PARA','MIENTRAS','LEER','MOSTRAR'].includes(k)) {
+        env[k] = evalExpr(assignM[2].trim());
+        renderVars();
+      }
+      i++; continue;
+    }
+
+    // CALCULAR x = expr (alias de asignación)
+    const calcM = line.match(/^CALCULAR\s+(\S+)\s*=\s*(.+)$/i);
+    if (calcM) {
+      env[calcM[1].toUpperCase()] = evalExpr(calcM[2].trim());
+      renderVars();
+      i++; continue;
+    }
+
+    // línea no reconocida — ignorar silenciosamente
+    i++;
+  }
+}
+
+// ── UTILIDADES DE BLOQUES ────────────────────────────
+function findBlockEnd(lines, from, endKeyword) {
+  // Pila de cierres pendientes: cada bloque anidado (PARA/MIENTRAS/SI) empuja
+  // su propio cierre y solo ese cierre lo desapila. Antes se llevaba una única
+  // cuenta de profundidad para cualquier apertura (incluido SI), pero un SI
+  // anidado dentro de un PARA/MIENTRAS incrementaba esa cuenta sin que su
+  // FIN_SI la decrementara nunca (solo decrementa el FIN_PARA/FIN_MIENTRAS
+  // buscado), así que el bloque se extendía hasta el final del fichero.
+  const stack = [endKeyword.toUpperCase()];
+  for (let i = from + 1; i < lines.length; i++) {
+    const t = tokenize(lines[i]).toUpperCase();
+    const isParaOpen     = /^PARA\s+\S/.test(t) && /\sHACER\s*$/.test(t);
+    const isMientrasOpen = /^MIENTRAS\s+/.test(t) && /\sHACER\s*$/.test(t);
+    const isSiOpen       = /^SI\s+/.test(t) && /\sENTONCES\s*$/.test(t);
+
+    if (isParaOpen) stack.push('FIN_PARA');
+    else if (isMientrasOpen) stack.push('FIN_MIENTRAS');
+    else if (isSiOpen) stack.push('FIN_SI');
+    else if (t === 'FIN_PARA' || t === 'FIN_MIENTRAS' || t === 'FIN_SI') {
+      if (stack[stack.length - 1] === t) {
+        stack.pop();
+        if (stack.length === 0) return i;
+      }
+    }
+  }
+  return lines.length - 1;
+}
+
+function findIfBlock(lines, siIdx) {
+  let depth = 0;
+  let thenEnd = -1, elseStart = -1, elseEnd = -1;
+  for (let i = siIdx; i < lines.length; i++) {
+    const t = tokenize(lines[i]).toUpperCase();
+    if (i === siIdx) { depth = 1; continue; }
+    if (/^SI\s.+ENTONCES\s*$/.test(t)) depth++;
+    if (depth === 1 && t === 'SI NO') {
+      thenEnd = i; elseStart = i;
+    }
+    if (t === 'FIN_SI') {
+      depth--;
+      if (depth === 0) {
+        if (elseStart < 0) thenEnd = i;
+        elseEnd = i;
+        return { thenEnd, elseStart, elseEnd };
+      }
+    }
+  }
+  return { thenEnd: lines.length - 1, elseStart: -1, elseEnd: lines.length - 1 };
+}
+
+// ── INPUT INTERACTIVO ────────────────────────────────
+function showInput() {
+  document.getElementById('input-row').classList.remove('hidden');
+  document.getElementById('runtime-input').value = '';
+  document.getElementById('runtime-input').focus();
+}
+function hideInput() {
+  document.getElementById('input-row').classList.add('hidden');
+}
+
+function waitForInput(varName) {
+  return new Promise(resolve => {
+    resolveInput = resolve;
+    showInput();
+  });
+}
+
+function sendInput() {
+  const val = document.getElementById('runtime-input').value.trim() || '0';
+  hideInput();
+  if (resolveInput) { resolveInput(val); resolveInput = null; }
+}
+
+document.getElementById('runtime-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendInput();
+});
+</script>
+</body>
+</html>
