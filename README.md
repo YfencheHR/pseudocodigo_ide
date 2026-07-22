@@ -2,7 +2,9 @@
 
 **PseudoIDE** — editor e intérprete de pseudocódigo en español, 100% en el navegador, pensado para introducir a alumnos en la programación sin necesidad de instalar nada.
 
-Se ejecuta completamente en el cliente (HTML + CSS + JavaScript vanilla, sin backend ni dependencias externas). Basta con abrir `index.html` en cualquier navegador.
+Se ejecuta completamente en el cliente (HTML + CSS + JavaScript vanilla, sin backend ni dependencias externas).
+
+**🔗 Pruébalo online, sin instalar nada: [yfenchehr.github.io/pseudocodigo_ide](https://yfenchehr.github.io/pseudocodigo_ide/)**
 
 ## Finalidad
 
@@ -35,11 +37,9 @@ Es un proyecto público y sin ánimo de lucro. Cualquier centro educativo, docen
 
 ## Cómo usarlo
 
-Abre `index.html` directamente en el navegador (doble clic, o sírvelo con cualquier servidor estático). No requiere instalación, compilación ni conexión a internet.
+La forma más rápida es entrar directamente en **[yfenchehr.github.io/pseudocodigo_ide](https://yfenchehr.github.io/pseudocodigo_ide/)** desde cualquier navegador (ordenador, tablet o Chromebook de clase). No requiere instalación, cuenta ni conexión constante: una vez cargada la página, funciona sin conexión.
 
-### Publicarlo online con GitHub Pages
-
-Al ser un único `index.html` estático, puede servirse gratis con GitHub Pages: en el repositorio, **Settings → Pages → Deploy from a branch**, rama `main` y carpeta `/ (root)`. Quedará accesible en `https://yfenchehr.github.io/pseudocodigo_ide/` para usarlo en clase sin descargar nada.
+También puedes descargar el repositorio y abrir `index.html` directamente en el navegador (doble clic), o servirlo con cualquier servidor estático.
 
 ## Referencia del lenguaje
 
