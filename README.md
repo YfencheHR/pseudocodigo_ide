@@ -63,6 +63,10 @@ Al ser un único `index.html` estático, puede servirse gratis con GitHub Pages:
 **Conectores lógicos:** `Y`, `O` (con la precedencia habitual: `Y` liga más fuerte que `O`).
 Los nombres de variable admiten tildes y `ñ`, y no distinguen mayúsculas de minúsculas.
 
+## Uso pedagógico del propio código fuente
+
+Además de usarse como herramienta en clase, el propio fichero `index.html` puede servir como material didáctico en sí mismo. Es un único archivo, sin build ni dependencias, con un intérprete de pseudocódigo completo implementado a mano: tokenizador, evaluador de expresiones y condiciones, y un ejecutor recursivo de bloques (`SI`, `MIENTRAS`, `PARA`). Para alumnos más avanzados (o de asignaturas de compiladores/lenguajes), es un ejemplo real y legible de cómo funciona por dentro un intérprete sencillo.
+
 ## Estado del proyecto
 
 Prototipo funcional (MVP) en desarrollo activo.
@@ -71,6 +75,16 @@ Prototipo funcional (MVP) en desarrollo activo.
 
 Distribuido bajo licencia [MIT](LICENSE). Puedes usarlo, copiarlo, modificarlo y redistribuirlo libremente, incluso en contextos educativos institucionales, manteniendo el aviso de copyright original.
 
-## Contribuciones
+## Contribuciones y reporte de errores
 
-Al ser un proyecto público y sin ánimo de lucro, las contribuciones de la comunidad docente y de desarrolladores son bienvenidas. (Guía de contribución detallada, próximamente.)
+Al ser un proyecto público y sin ánimo de lucro, las contribuciones de la comunidad docente y de desarrolladores son bienvenidas.
+
+Si encuentras un error, tienes una sugerencia o quieres proponer una mejora (por ejemplo, una nueva misión), abre un [Issue](../../issues) en este repositorio. Si quieres aportar código directamente, puedes abrir un Pull Request.
+
+## Autor y contacto
+
+Proyecto mantenido por Yfenche. Para dudas, sugerencias o colaboraciones: yfenchehr@gmail.com
+
+## Nota sobre el desarrollo
+
+Este proyecto se ha desarrollado con ayuda de inteligencia artificial (Claude, de Anthropic), tanto para la programación como para la documentación. Se indica por transparencia, especialmente al tratarse de un recurso educativo.
