@@ -29,7 +29,7 @@ Es un proyecto público y sin ánimo de lucro. Cualquier centro educativo, docen
 - Botón **⏹ Detener** para interrumpir una ejecución en curso.
 - Autoguardado del contenido del editor en el navegador (`localStorage`): recargar la página no pierde el trabajo.
 - Atajo de teclado **Ctrl+Enter** (o Cmd+Enter) para ejecutar.
-- Diseño adaptable: en pantallas estrechas el editor y la consola se apilan en vertical.
+- Diseño adaptable a móvil: en pantallas estrechas el editor y la consola se apilan en vertical y cada panel se pliega/despliega tocando su cabecera, para no malgastar espacio. Al ejecutar, la consola pasa a primer plano automáticamente; la barra de inserción se convierte en una fila deslizable.
 - Tres misiones/ejercicios precargados a modo de práctica gamificada:
   - 🔐 **Escape Room algorítmico** — bucles, condiciones y entrada de datos.
   - 🚀 **Control de nave espacial** — simulación con `MIENTRAS` y estado.

@@ -123,6 +123,21 @@
   .btn-stop:hover:not(:disabled) { background: var(--red); color: #fff; }
   .btn-stop:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  /* botón de plegar/desplegar panel (solo visible en móvil) */
+  .panel-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 4px 8px;
+    margin-left: 6px;
+    transition: transform 0.2s;
+  }
+  .panel-toggle:hover { color: var(--text); }
+
   /* ── SNIPPET BAR ─────────────────────────────────────── */
   .snippetbar {
     background: var(--surface);
@@ -355,12 +370,34 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-  /* pantallas estrechas: editor y consola apilados */
+  /* pantallas estrechas: editor y consola apilados y plegables */
   @media (max-width: 720px) {
-    .workspace { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    .workspace { display: flex; flex-direction: column; }
+    .panel, .output-panel {
+      flex: 1 1 0;
+      min-height: 0;
+    }
     .panel { border-right: none; border-bottom: 1px solid var(--border); }
+
+    /* cabecera plegable: cursor y botón de flecha visibles */
+    .panel-header { cursor: pointer; user-select: none; }
+    .panel-toggle { display: inline-block; }
+
+    /* panel colapsado: solo se ve su cabecera */
+    .panel.collapsed, .output-panel.collapsed { flex: 0 0 auto; }
+    .panel.collapsed .editor-wrap,
+    .panel.collapsed .statusbar,
+    .output-panel.collapsed .console,
+    .output-panel.collapsed .input-row { display: none; }
+    .output-panel.collapsed .vars-panel { display: none !important; }
+    .collapsed .panel-toggle { transform: rotate(-90deg); }
+
     .topbar { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
     .mission-select { margin-left: 0; }
+
+    /* barra de inserción en una sola fila deslizable, sin comerse alto */
+    .snippetbar { flex-wrap: nowrap; overflow-x: auto; }
+    .snippetbar-label { position: sticky; left: 0; background: var(--surface); }
   }
 </style>
 </head>
@@ -403,11 +440,13 @@
 <div class="workspace">
 
   <!-- EDITOR -->
-  <div class="panel">
-    <div class="panel-header">
+  <div class="panel" id="editor-panel">
+    <div class="panel-header" onclick="togglePanel('editor-panel')">
       <span class="dot dot-green"></span>
       Editor de pseudocódigo
       <span style="margin-left:auto;font-size:10px" id="line-col">L1 C1</span>
+      <button type="button" class="panel-toggle" aria-label="Plegar o desplegar el editor"
+        onclick="event.stopPropagation(); togglePanel('editor-panel')">▾</button>
     </div>
     <div class="editor-wrap">
       <div class="line-numbers" id="line-numbers">1</div>
@@ -422,12 +461,14 @@ Pulsa ▶ Ejecutar para ver el resultado."></textarea>
     </div>
   </div>
 
-  <!-- OUTPUT -->
-  <div class="output-panel">
-    <div class="panel-header">
+  <!-- OUTPUT (arranca plegado en móvil; en escritorio la clase se ignora) -->
+  <div class="output-panel collapsed" id="output-panel">
+    <div class="panel-header" onclick="togglePanel('output-panel')">
       <span class="dot dot-blue"></span>
       Consola de salida
-      <button class="btn btn-clear" style="margin-left:auto;padding:2px 8px;font-size:11px" onclick="clearConsole()">Borrar</button>
+      <button class="btn btn-clear" style="margin-left:auto;padding:2px 8px;font-size:11px" onclick="event.stopPropagation(); clearConsole()">Borrar</button>
+      <button type="button" class="panel-toggle" aria-label="Plegar o desplegar la consola"
+        onclick="event.stopPropagation(); togglePanel('output-panel')">▾</button>
     </div>
     <div class="console" id="console">
       <div class="console-line info">// PseudoIDE listo. Escribe tu pseudocódigo y pulsa ▶ Ejecutar.</div>
@@ -753,6 +794,24 @@ try {
 }
 
 // ═══════════════════════════════════════════════════════
+//  PANELES PLEGABLES (móvil)
+// ═══════════════════════════════════════════════════════
+// La clase .collapsed solo tiene efecto visual dentro de la media query
+// de móvil; en escritorio se ignora, así que podemos alternarla sin
+// comprobar el ancho de pantalla.
+
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+// Al ejecutar, damos todo el protagonismo a la consola en móvil:
+// se despliega la consola y se pliega el editor para ver bien la salida.
+function focusConsoleMobile() {
+  document.getElementById('output-panel').classList.remove('collapsed');
+  document.getElementById('editor-panel').classList.add('collapsed');
+}
+
+// ═══════════════════════════════════════════════════════
 //  CONSOLA
 // ═══════════════════════════════════════════════════════
 const cons = document.getElementById('console');
@@ -1065,6 +1124,7 @@ async function runCode() {
   clearConsole();
   setStatus('Ejecutando…', 'run');
   document.getElementById('btn-stop').disabled = false;
+  focusConsoleMobile();
 
   const raw = editor.value;
   const lines = raw.split('\n');
@@ -1296,6 +1356,9 @@ function findIfBlock(lines, siIdx) {
 
 // ── INPUT INTERACTIVO ────────────────────────────────
 function showInput() {
+  // por si el usuario plegó la consola a mano, la reabrimos para que
+  // vea la petición de dato y el cuadro de entrada
+  document.getElementById('output-panel').classList.remove('collapsed');
   document.getElementById('input-row').classList.remove('hidden');
   document.getElementById('runtime-input').value = '';
   document.getElementById('runtime-input').focus();
