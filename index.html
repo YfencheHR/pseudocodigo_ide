@@ -379,9 +379,8 @@
     }
     .panel { border-right: none; border-bottom: 1px solid var(--border); }
 
-    /* cabecera plegable: cursor y botón de flecha visibles */
-    .panel-header { cursor: pointer; user-select: none; }
-    .panel-toggle { display: inline-block; }
+    /* el botón de flecha aparece y se agranda para tocarlo cómodo */
+    .panel-toggle { display: inline-block; padding: 6px 14px; font-size: 14px; }
 
     /* panel colapsado: solo se ve su cabecera */
     .panel.collapsed, .output-panel.collapsed { flex: 0 0 auto; }
@@ -441,16 +440,16 @@
 
   <!-- EDITOR -->
   <div class="panel" id="editor-panel">
-    <div class="panel-header" onclick="togglePanel('editor-panel')">
+    <div class="panel-header">
       <span class="dot dot-green"></span>
       Editor de pseudocódigo
       <span style="margin-left:auto;font-size:10px" id="line-col">L1 C1</span>
       <button type="button" class="panel-toggle" aria-label="Plegar o desplegar el editor"
-        onclick="event.stopPropagation(); togglePanel('editor-panel')">▾</button>
+        onclick="togglePanel('editor-panel')">▾</button>
     </div>
     <div class="editor-wrap">
       <div class="line-numbers" id="line-numbers">1</div>
-      <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off"
+      <textarea id="editor" aria-label="Editor de pseudocódigo" spellcheck="false" autocomplete="off" autocorrect="off"
         placeholder="Escribe tu pseudocódigo aquí...
 Pulsa ▶ Ejecutar para ver el resultado."></textarea>
     </div>
@@ -463,12 +462,12 @@ Pulsa ▶ Ejecutar para ver el resultado."></textarea>
 
   <!-- OUTPUT (arranca plegado en móvil; en escritorio la clase se ignora) -->
   <div class="output-panel collapsed" id="output-panel">
-    <div class="panel-header" onclick="togglePanel('output-panel')">
+    <div class="panel-header">
       <span class="dot dot-blue"></span>
       Consola de salida
-      <button class="btn btn-clear" style="margin-left:auto;padding:2px 8px;font-size:11px" onclick="event.stopPropagation(); clearConsole()">Borrar</button>
+      <button class="btn btn-clear" style="margin-left:auto;padding:2px 8px;font-size:11px" onclick="clearConsole()">Borrar</button>
       <button type="button" class="panel-toggle" aria-label="Plegar o desplegar la consola"
-        onclick="event.stopPropagation(); togglePanel('output-panel')">▾</button>
+        onclick="togglePanel('output-panel')">▾</button>
     </div>
     <div class="console" id="console">
       <div class="console-line info">// PseudoIDE listo. Escribe tu pseudocódigo y pulsa ▶ Ejecutar.</div>
@@ -1188,19 +1187,24 @@ async function execLine(lines, i, line, UP) {
   if (UP.startsWith('ACTIVAR ')) return execActivar(line, i);
   if (UP.startsWith('LEER '))    return execLeer(line, i);
 
+  // PARA <var> EN [lista] HACER
   const paraEnM = line.match(/^PARA\s+(\S+)\s+EN\s+\[([^\]]*)\]\s+HACER\s*$/i);
   if (paraEnM) return execParaEn(lines, i, paraEnM);
 
-  const paraHastaM = line.match(/^PARA\s+(\S+)\s*=\s*(.+?)\s+HASTA\s+(.+?)\s+HACER\s*$/i);
-  if (paraHastaM) return execParaHasta(lines, i, paraHastaM);
+  // PARA <var> = <inicio> HASTA <fin> HACER
+  const paraHasta = matchParaHasta(line, UP);
+  if (paraHasta) return execParaHasta(lines, i, paraHasta);
 
-  const mienM = line.match(/^MIENTRAS\s+(.+?)\s+HACER\s*$/i);
-  if (mienM) return execMientras(lines, i, mienM[1]);
+  // MIENTRAS <cond> HACER
+  const mienCond = middleBetween(line, UP, 'MIENTRAS', 'HACER');
+  if (mienCond) return execMientras(lines, i, mienCond);
 
-  const siM = line.match(/^SI\s+(.+?)\s+ENTONCES\s*$/i);
-  if (siM) return execSi(lines, i, siM[1]);
+  // SI <cond> ENTONCES
+  const siCond = middleBetween(line, UP, 'SI', 'ENTONCES');
+  if (siCond) return execSi(lines, i, siCond);
 
-  const assignM = line.match(/^(\S+)\s*=\s*(.+)$/);
+  // asignación  variable = expresión
+  const assignM = line.match(/^([^\s=]+)\s*=\s*(.+)$/);
   if (assignM) return execAsignacion(assignM, i);
 
   // línea no reconocida — avisar sin detener la ejecución, para que el
@@ -1267,9 +1271,9 @@ function parseListItem(s) {
 }
 
 async function execParaHasta(lines, i, m) {
-  const varN  = m[1].toUpperCase();
-  const start = Number.parseFloat(evalExpr(m[2]));
-  const end   = Number.parseFloat(evalExpr(m[3]));
+  const varN  = m.varN.toUpperCase();
+  const start = Number.parseFloat(evalExpr(m.start));
+  const end   = Number.parseFloat(evalExpr(m.end));
   const blockEnd = findBlockEnd(lines, i, 'FIN_PARA');
   for (let v = start; v <= end; v++) {
     await checkBudget();
@@ -1277,6 +1281,31 @@ async function execParaHasta(lines, i, m) {
     await execute(lines, i + 1, blockEnd - 1);
   }
   return blockEnd + 1;
+}
+
+// Texto entre "abre " y " cierra" (palabras enteras, may/mín ignoradas) o null.
+// Reemplaza a las regex tipo /^ABRE\s+(.+?)\s+CIERRA\s*$/ que tenían
+// retroceso cuadrático (el .+? perezoso solapaba con el \s+ del cierre).
+function middleBetween(line, UP, open, close) {
+  if (!UP.startsWith(open + ' ') || !UP.endsWith(' ' + close)) return null;
+  const middle = line.slice(open.length, line.length - close.length).trim();
+  return middle || null;
+}
+
+// Analiza "PARA <var> = <inicio> HASTA <fin> HACER"; devuelve {varN,start,end} o null.
+function matchParaHasta(line, UP) {
+  const body = middleBetween(line, UP, 'PARA', 'HACER');
+  if (!body) return null;
+  const hastaIdx = body.toUpperCase().indexOf(' HASTA ');
+  const eqIdx = body.indexOf('=');
+  if (eqIdx < 1 || hastaIdx < eqIdx) return null;
+  const varN = body.slice(0, eqIdx).trim();
+  if (!varN || /\s/.test(varN)) return null;   // el nombre de variable no lleva espacios
+  return {
+    varN,
+    start: body.slice(eqIdx + 1, hastaIdx).trim(),
+    end:   body.slice(hastaIdx + 7).trim()      // 7 = longitud de " HASTA "
+  };
 }
 
 async function execMientras(lines, i, cond) {
